@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Last War Runner (Ad-style)</title>
+<title>Last War 3D Runner</title>
 <style>
-  body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; font-family:sans-serif; }
+  body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; font-family:sans-serif; overflow:hidden; }
   canvas { background:linear-gradient(180deg,#071127,#0b1020); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); }
   #overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); color:white; flex-direction:column; }
   button { margin-top:12px; padding:10px 16px; border:none; border-radius:8px; background:#6ef0b1; font-weight:bold; cursor:pointer; }
 </style>
 </head>
 <body>
-<canvas id="game" width="360" height="640"></canvas>
+<canvas id="game" width="400" height="640"></canvas>
 <div id="overlay">
-  <h2>Last War Runner</h2>
-  <p>Swipe or use arrow keys to dodge obstacles and collect allies!</p>
+  <h2>Last War 3D Runner</h2>
+  <p>Arrow keys or swipe to move lanes.</p>
   <button id="startBtn">Start</button>
 </div>
 <script>
@@ -24,89 +24,98 @@ const ctx=canvas.getContext('2d');
 const overlay=document.getElementById('overlay');
 const startBtn=document.getElementById('startBtn');
 
-// game state
 let running=false;
-let player={lane:1,y:520,size:40}; // lane: 0 left, 1 middle, 2 right
-let laneX=[90,180,270];
-let obstacles=[];
-let pickups=[];
-let speed=3;
 let score=0;
+let speed=4;
+
+// Player state
+let player={lane:1,y:0}; // lane: 0 left, 1 middle, 2 right
+const laneCount=3;
+
+// Obstacles and pickups
+let objects=[];
 
 function resetGame(){
-  player.lane=1;
-  obstacles=[];
-  pickups=[];
   score=0;
-  speed=3;
+  speed=4;
+  player.lane=1;
+  objects=[];
 }
 
-function spawnObstacle(){
-  const lane=Math.floor(Math.random()*3);
-  obstacles.push({lane:lane,y:-40,size:40});
+// perspective transform: map z-depth to screen size & y-position
+function project(z){
+  const scale=1/(z*0.003+0.2); // closer z -> bigger scale
+  const y=canvas.height - z*0.5;
+  return {scale,y};
 }
 
-function spawnPickup(){
-  const lane=Math.floor(Math.random()*3);
-  pickups.push({lane:lane,y:-30,size:24});
+function spawnObject(type){
+  const lane=Math.floor(Math.random()*laneCount);
+  objects.push({lane,z:1000,type});
 }
 
 function update(){
-  // move obstacles and pickups
-  obstacles.forEach(o=>o.y+=speed);
-  pickups.forEach(p=>p.y+=speed);
+  objects.forEach(o=>o.z-=speed);
 
-  // collision check
-  for(let i=0;i<obstacles.length;i++){
-    const o=obstacles[i];
-    if(o.lane===player.lane && Math.abs(o.y-player.y)<40){
-      running=false; // game over
-      overlay.style.display='flex';
-      overlay.innerHTML=`<h2>Game Over</h2><p>Score: ${score}</p><button onclick=\"location.reload()\">Restart</button>`;
-    }
-  }
-  for(let i=0;i<pickups.length;i++){
-    const p=pickups[i];
-    if(p.lane===player.lane && Math.abs(p.y-player.y)<40){
-      score+=10;
-      pickups.splice(i,1);
-      i--;
+  // collisions when object reaches z ~ 0
+  for(let i=0;i<objects.length;i++){
+    let o=objects[i];
+    if(o.z<80){
+      if(o.lane===player.lane){
+        if(o.type==='obstacle'){
+          running=false;
+          overlay.style.display='flex';
+          overlay.innerHTML=`<h2>Game Over</h2><p>Score: ${score}</p><button onclick=\"location.reload()\">Restart</button>`;
+        }
+        if(o.type==='pickup'){
+          score+=10;
+        }
+      }
+      objects.splice(i,1); i--;
     }
   }
 
-  // remove off-screen
-  obstacles=obstacles.filter(o=>o.y<canvas.height+40);
-  pickups=pickups.filter(p=>p.y<canvas.height+40);
+  // spawn new objects randomly
+  if(Math.random()<0.02) spawnObject('obstacle');
+  if(Math.random()<0.01) spawnObject('pickup');
+
+  speed+=0.001; // slowly speed up
 }
 
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // draw lanes
-  ctx.strokeStyle='rgba(255,255,255,0.1)';
-  ctx.lineWidth=2;
+  // draw floating platform (simple trapezoid)
+  ctx.fillStyle='#1a2a3a';
   ctx.beginPath();
-  ctx.moveTo(120,0); ctx.lineTo(120,640);
-  ctx.moveTo(240,0); ctx.lineTo(240,640);
+  ctx.moveTo(60,canvas.height);
+  ctx.lineTo(340,canvas.height);
+  ctx.lineTo(250,100);
+  ctx.lineTo(150,100);
+  ctx.closePath();
+  ctx.fill();
+
+  // draw lanes lines
+  ctx.strokeStyle='rgba(255,255,255,0.2)';
+  ctx.beginPath();
+  ctx.moveTo(170,100); ctx.lineTo(110,canvas.height);
+  ctx.moveTo(230,100); ctx.lineTo(290,canvas.height);
   ctx.stroke();
 
-  // draw player
+  // draw objects
+  objects.forEach(o=>{
+    const {scale,y}=project(o.z);
+    const laneX=[140,200,260];
+    const x=laneX[o.lane];
+    const size=30*scale;
+    if(o.type==='obstacle') ctx.fillStyle='#ff7a7a'; else ctx.fillStyle='#ffd86b';
+    ctx.fillRect(x-size/2,y-size/2,size,size);
+  });
+
+  // draw player (at bottom)
+  const laneX=[140,200,260];
   ctx.fillStyle='#6ef0b1';
-  ctx.fillRect(laneX[player.lane]-player.size/2,player.y-player.size/2,player.size,player.size);
-
-  // draw obstacles
-  ctx.fillStyle='#ff7a7a';
-  obstacles.forEach(o=>{
-    ctx.fillRect(laneX[o.lane]-o.size/2,o.y-o.size/2,o.size,o.size);
-  });
-
-  // draw pickups
-  ctx.fillStyle='#ffd86b';
-  pickups.forEach(p=>{
-    ctx.beginPath();
-    ctx.arc(laneX[p.lane],p.y,p.size/2,0,Math.PI*2);
-    ctx.fill();
-  });
+  ctx.fillRect(laneX[player.lane]-20,canvas.height-80,40,40);
 
   // score
   ctx.fillStyle='#fff';
@@ -114,22 +123,10 @@ function draw(){
   ctx.fillText(`Score: ${score}`,12,24);
 }
 
-let lastSpawn=0;
-let lastPickup=0;
-function loop(timestamp){
+function loop(){
   if(!running) return;
   update();
   draw();
-
-  if(timestamp-lastSpawn>1200){
-    spawnObstacle();
-    lastSpawn=timestamp;
-  }
-  if(timestamp-lastPickup>2000){
-    spawnPickup();
-    lastPickup=timestamp;
-  }
-
   requestAnimationFrame(loop);
 }
 
