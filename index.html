@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Runner - Smooth</title>
+<title>3D Runner - Humanoid Player</title>
 <style>
   body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; overflow:hidden; }
   canvas { border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); background:linear-gradient(180deg,#071127,#0b1020); }
@@ -21,49 +21,43 @@ let player={x:canvas.width/2,bob:0,vx:0};
 const roadWidth=200;
 const maxSpeed=5;
 
-// generate player pseudo-3D gradient cube
-function createPlayerSprite(size=40){
+// create a simple 3D humanoid sprite
+function createHumanoidSprite(){
+  const size=40;
   const c=document.createElement('canvas');
   c.width=size; c.height=size;
   const ctx=c.getContext('2d');
-  // top face gradient
-  const gradTop=ctx.createLinearGradient(0,0,size,0);
-  gradTop.addColorStop(0,'#6ef0b1');
-  gradTop.addColorStop(1,'#3ba37a');
-  ctx.fillStyle=gradTop;
-  ctx.beginPath();
-  ctx.moveTo(size*0.25,0);
-  ctx.lineTo(size*0.75,0);
-  ctx.lineTo(size,size*0.25);
-  ctx.lineTo(0,size*0.25);
-  ctx.closePath();
-  ctx.fill();
-  // side face gradient
-  const gradSide=ctx.createLinearGradient(size*0.75,0,size,size);
-  gradSide.addColorStop(0,'#4cc79e');
-  gradSide.addColorStop(1,'#2a7d5a');
-  ctx.fillStyle=gradSide;
-  ctx.beginPath();
-  ctx.moveTo(size*0.75,0);
-  ctx.lineTo(size,size*0.25);
-  ctx.lineTo(size,size*0.75);
-  ctx.lineTo(size*0.75,size);
-  ctx.closePath();
-  ctx.fill();
-  // front face gradient
-  const gradFront=ctx.createLinearGradient(0,size*0.25,0,size);
-  gradFront.addColorStop(0,'#3ba37a');
-  gradFront.addColorStop(1,'#1e5a3c');
-  ctx.fillStyle=gradFront;
-  ctx.fillRect(size*0.25,size*0.25,size*0.5,size*0.75);
+
+  // body
+  const gradBody=ctx.createLinearGradient(0,size*0.25,0,size);
+  gradBody.addColorStop(0,'#4cc79e');
+  gradBody.addColorStop(1,'#2a7d5a');
+  ctx.fillStyle=gradBody;
+  ctx.fillRect(size*0.25,size*0.25,size*0.5,size*0.5);
+
+  // head
+  const gradHead=ctx.createLinearGradient(0,0,0,size*0.25);
+  gradHead.addColorStop(0,'#ffd6a5');
+  gradHead.addColorStop(1,'#e6b684');
+  ctx.fillStyle=gradHead;
+  ctx.fillRect(size*0.35,0,size*0.3,size*0.25);
+
+  // legs
+  ctx.fillStyle='#3ba37a';
+  ctx.fillRect(size*0.25,size*0.75,size*0.15,size*0.25);
+  ctx.fillRect(size*0.6,size*0.75,size*0.15,size*0.25);
+
+  // arms
+  ctx.fillRect(0.1*size,size*0.25,0.15*size,size*0.4);
+  ctx.fillRect(0.75*size,size*0.25,0.15*size,size*0.4);
+
   const img=new Image();
   img.src=c.toDataURL();
   return img;
 }
 
-const playerImg=createPlayerSprite();
+const playerImg=createHumanoidSprite();
 
-// project function for perspective
 function project(z){
   const scale=1/(z*0.003+0.2);
   const y=canvas.height - z*0.5;
@@ -76,10 +70,9 @@ function drawRoad(){
     const z=i*50;
     const {scale,y}=project(z);
     const w=roadWidth*scale;
-    const grad=ctx.createLinearGradient(canvas.width/2-w/2,y,canvas.width/2+w/2,y+50*scale);
-    grad.addColorStop(0,'#1a2a3a');
-    grad.addColorStop(1,'#162135');
-    ctx.fillStyle=grad;
+
+    // road
+    ctx.fillStyle='#444';
     ctx.beginPath();
     ctx.moveTo(canvas.width/2-w/2,y);
     ctx.lineTo(canvas.width/2+w/2,y);
@@ -87,6 +80,23 @@ function drawRoad(){
     ctx.lineTo(canvas.width/2-w/2,y+50*scale);
     ctx.closePath();
     ctx.fill();
+
+    // lane line
+    if(i%2===0){
+      ctx.strokeStyle='#fff';
+      ctx.lineWidth=2*scale;
+      ctx.setLineDash([10*scale,10*scale]);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width/2,y+25*scale);
+      ctx.lineTo(canvas.width/2,y+50*scale);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // road edges
+    ctx.strokeStyle='#222';
+    ctx.lineWidth=1*scale;
+    ctx.strokeRect(canvas.width/2-w/2,y,w,50*scale);
   }
 }
 
@@ -104,11 +114,9 @@ function draw(){
 function update(){
   // smooth horizontal movement
   player.x+=player.vx;
-  // clamp within road
   const halfRoad=roadWidth/2-20;
   if(player.x<canvas.width/2-halfRoad) player.x=canvas.width/2-halfRoad;
   if(player.x>canvas.width/2+halfRoad) player.x=canvas.width/2+halfRoad;
-  // apply friction
   player.vx*=0.9;
 }
 
@@ -124,10 +132,9 @@ const keys={};
 window.addEventListener('keydown',e=>{keys[e.key]=true;});
 window.addEventListener('keyup',e=>{keys[e.key]=false;});
 function handleInput(){
-  if(keys['ArrowLeft']) player.vx=-maxSpeed;
-  else if(keys['ArrowRight']) player.vx=maxSpeed;
+  if(keys['ArrowLeft']) player.vx=-5;
+  else if(keys['ArrowRight']) player.vx=5;
 }
-
 setInterval(handleInput,16);
 loop();
 </script>
