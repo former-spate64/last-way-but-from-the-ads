@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Last War 3D Runner</title>
+<title>Last War 3D Runner Sprites</title>
 <style>
   body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; font-family:sans-serif; overflow:hidden; }
   canvas { background:linear-gradient(180deg,#071127,#0b1020); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); }
@@ -28,8 +28,13 @@ let running=false;
 let score=0;
 let speed=4;
 
+// Images (placeholder URLs or local files)
+const playerImg = new Image(); playerImg.src='player.png';
+const enemyImg = new Image(); enemyImg.src='enemy.png';
+const pickupImg = new Image(); pickupImg.src='pickup.png';
+
 // Player state
-let player={lane:1,y:0}; // lane: 0 left, 1 middle, 2 right
+let player={lane:1};
 const laneCount=3;
 
 // Obstacles and pickups
@@ -42,9 +47,8 @@ function resetGame(){
   objects=[];
 }
 
-// perspective transform: map z-depth to screen size & y-position
 function project(z){
-  const scale=1/(z*0.003+0.2); // closer z -> bigger scale
+  const scale=1/(z*0.003+0.2); // smaller when far away
   const y=canvas.height - z*0.5;
   return {scale,y};
 }
@@ -57,7 +61,6 @@ function spawnObject(type){
 function update(){
   objects.forEach(o=>o.z-=speed);
 
-  // collisions when object reaches z ~ 0
   for(let i=0;i<objects.length;i++){
     let o=objects[i];
     if(o.z<80){
@@ -75,17 +78,16 @@ function update(){
     }
   }
 
-  // spawn new objects randomly
   if(Math.random()<0.02) spawnObject('obstacle');
   if(Math.random()<0.01) spawnObject('pickup');
 
-  speed+=0.001; // slowly speed up
+  speed+=0.001;
 }
 
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // draw floating platform (simple trapezoid)
+  // draw platform (trapezoid)
   ctx.fillStyle='#1a2a3a';
   ctx.beginPath();
   ctx.moveTo(60,canvas.height);
@@ -95,7 +97,7 @@ function draw(){
   ctx.closePath();
   ctx.fill();
 
-  // draw lanes lines
+  // lane lines
   ctx.strokeStyle='rgba(255,255,255,0.2)';
   ctx.beginPath();
   ctx.moveTo(170,100); ctx.lineTo(110,canvas.height);
@@ -103,19 +105,16 @@ function draw(){
   ctx.stroke();
 
   // draw objects
+  const laneX=[140,200,260];
   objects.forEach(o=>{
     const {scale,y}=project(o.z);
-    const laneX=[140,200,260];
-    const x=laneX[o.lane];
-    const size=30*scale;
-    if(o.type==='obstacle') ctx.fillStyle='#ff7a7a'; else ctx.fillStyle='#ffd86b';
-    ctx.fillRect(x-size/2,y-size/2,size,size);
+    const size=40*scale;
+    if(o.type==='obstacle') ctx.drawImage(enemyImg,laneX[o.lane]-size/2,y-size/2,size,size);
+    else ctx.drawImage(pickupImg,laneX[o.lane]-size/2,y-size/2,size,size);
   });
 
-  // draw player (at bottom)
-  const laneX=[140,200,260];
-  ctx.fillStyle='#6ef0b1';
-  ctx.fillRect(laneX[player.lane]-20,canvas.height-80,40,40);
+  // draw player
+  ctx.drawImage(playerImg,laneX[player.lane]-20,canvas.height-80,40,40);
 
   // score
   ctx.fillStyle='#fff';
