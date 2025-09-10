@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Runner - Solo</title>
+<title>3D Runner - Smooth</title>
 <style>
   body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; overflow:hidden; }
   canvas { border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); background:linear-gradient(180deg,#071127,#0b1020); }
@@ -15,17 +15,22 @@
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 
-let laneCount=3;
-let player={lane:1,bob:0};
 let tick=0;
 let running=true;
+let player={x:canvas.width/2,bob:0,vx:0};
+const roadWidth=200;
+const maxSpeed=5;
 
-// generate player sprite
-function createCubeSprite(color1,color2,color3,size=40){
+// generate player pseudo-3D gradient cube
+function createPlayerSprite(size=40){
   const c=document.createElement('canvas');
   c.width=size; c.height=size;
   const ctx=c.getContext('2d');
-  ctx.fillStyle=color1;
+  // top face gradient
+  const gradTop=ctx.createLinearGradient(0,0,size,0);
+  gradTop.addColorStop(0,'#6ef0b1');
+  gradTop.addColorStop(1,'#3ba37a');
+  ctx.fillStyle=gradTop;
   ctx.beginPath();
   ctx.moveTo(size*0.25,0);
   ctx.lineTo(size*0.75,0);
@@ -33,7 +38,11 @@ function createCubeSprite(color1,color2,color3,size=40){
   ctx.lineTo(0,size*0.25);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle=color2;
+  // side face gradient
+  const gradSide=ctx.createLinearGradient(size*0.75,0,size,size);
+  gradSide.addColorStop(0,'#4cc79e');
+  gradSide.addColorStop(1,'#2a7d5a');
+  ctx.fillStyle=gradSide;
   ctx.beginPath();
   ctx.moveTo(size*0.75,0);
   ctx.lineTo(size,size*0.25);
@@ -41,13 +50,18 @@ function createCubeSprite(color1,color2,color3,size=40){
   ctx.lineTo(size*0.75,size);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle=color3;
+  // front face gradient
+  const gradFront=ctx.createLinearGradient(0,size*0.25,0,size);
+  gradFront.addColorStop(0,'#3ba37a');
+  gradFront.addColorStop(1,'#1e5a3c');
+  ctx.fillStyle=gradFront;
   ctx.fillRect(size*0.25,size*0.25,size*0.5,size*0.75);
   const img=new Image();
   img.src=c.toDataURL();
   return img;
 }
-const playerImg=createCubeSprite('#6ef0b1','#4cc79e','#3ba37a');
+
+const playerImg=createPlayerSprite();
 
 // project function for perspective
 function project(z){
@@ -61,13 +75,16 @@ function drawRoad(){
   for(let i=0;i<segments;i++){
     const z=i*50;
     const {scale,y}=project(z);
-    const roadWidth=200*scale;
-    ctx.fillStyle=i%2===0?'#1a2a3a':'#162135';
+    const w=roadWidth*scale;
+    const grad=ctx.createLinearGradient(canvas.width/2-w/2,y,canvas.width/2+w/2,y+50*scale);
+    grad.addColorStop(0,'#1a2a3a');
+    grad.addColorStop(1,'#162135');
+    ctx.fillStyle=grad;
     ctx.beginPath();
-    ctx.moveTo(canvas.width/2-roadWidth/2,y);
-    ctx.lineTo(canvas.width/2+roadWidth/2,y);
-    ctx.lineTo(canvas.width/2+roadWidth/2,y+50*scale);
-    ctx.lineTo(canvas.width/2-roadWidth/2,y+50*scale);
+    ctx.moveTo(canvas.width/2-w/2,y);
+    ctx.lineTo(canvas.width/2+w/2,y);
+    ctx.lineTo(canvas.width/2+w/2,y+50*scale);
+    ctx.lineTo(canvas.width/2-w/2,y+50*scale);
     ctx.closePath();
     ctx.fill();
   }
@@ -80,23 +97,38 @@ function draw(){
 
   drawRoad();
 
-  const laneX=[canvas.width/2-50,canvas.width/2,canvas.width/2+50];
   const size=40;
-  ctx.drawImage(playerImg,laneX[player.lane]-size/2,canvas.height-100+player.bob,size,size);
+  ctx.drawImage(playerImg,player.x-size/2,canvas.height-100+player.bob,size,size);
+}
+
+function update(){
+  // smooth horizontal movement
+  player.x+=player.vx;
+  // clamp within road
+  const halfRoad=roadWidth/2-20;
+  if(player.x<canvas.width/2-halfRoad) player.x=canvas.width/2-halfRoad;
+  if(player.x>canvas.width/2+halfRoad) player.x=canvas.width/2+halfRoad;
+  // apply friction
+  player.vx*=0.9;
 }
 
 function loop(){
   if(!running) return;
+  update();
   draw();
   requestAnimationFrame(loop);
 }
 
 // controls
-window.addEventListener('keydown',e=>{
-  if(e.key==='ArrowLeft'&&player.lane>0) player.lane--;
-  if(e.key==='ArrowRight'&&player.lane<2) player.lane++;
-});
+const keys={};
+window.addEventListener('keydown',e=>{keys[e.key]=true;});
+window.addEventListener('keyup',e=>{keys[e.key]=false;});
+function handleInput(){
+  if(keys['ArrowLeft']) player.vx=-maxSpeed;
+  else if(keys['ArrowRight']) player.vx=maxSpeed;
+}
 
+setInterval(handleInput,16);
 loop();
 </script>
 </body>
