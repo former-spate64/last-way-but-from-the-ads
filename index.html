@@ -3,207 +3,161 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Last War — Ad-style Mini Game (Ad Mock)</title>
+<title>Last War Runner (Ad-style)</title>
 <style>
-  :root{--bg:#0b1020;--panel:#0f1724;--accent:#ffb86b;--glass:rgba(255,255,255,0.04)}
-  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
-  body{background:linear-gradient(180deg,var(--bg),#07101a);color:#e6eef8;display:flex;align-items:center;justify-content:center}
-  .game-shell{width:360px;height:740px;border-radius:26px;box-shadow:0 20px 60px rgba(2,6,23,0.7);overflow:hidden;background:linear-gradient(180deg,#071127 0%, #081627 100%);position:relative}
-  header{height:72px;display:flex;align-items:center;justify-content:space-between;padding:12px}
-  .logo{display:flex;gap:8px;align-items:center}
-  .logo .badge{width:52px;height:48px;border-radius:8px;background:linear-gradient(135deg,#ff7a7a,#ffce7a);display:flex;align-items:center;justify-content:center;font-weight:700;color:#102033}
-  .top-info{font-size:13px;opacity:0.95}
-  .screen{position:relative;height:calc(100% - 72px);display:flex;flex-direction:column}
-  .ad-banner{height:120px;background:linear-gradient(90deg,#0d2030, #092437);margin:12px;border-radius:12px;padding:12px;display:flex;align-items:center;gap:8px}
-  .ad-left{flex:1}
-  .ad-right{width:120px;height:96px;background:linear-gradient(90deg,#0b1522,#0f1a2b);border-radius:10px;display:flex;align-items:center;justify-content:center}
-  .cta{display:inline-block;margin-top:8px;background:linear-gradient(90deg,#ffb86b,#ff7a7a);color:#081024;padding:8px 12px;border-radius:8px;font-weight:700}
-  canvas{display:block;border-radius:12px;margin:12px;background:linear-gradient(180deg,#0c1726,#071124);box-shadow:inset 0 -6px 24px rgba(0,0,0,0.4)}
-  .hud{height:86px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .button{background:var(--glass);padding:10px 12px;border-radius:10px;font-weight:700}
-  .small{font-size:12px;opacity:0.9}
-  .banner-flash{position:absolute;left:0;right:0;top:72px;height:18px;background:linear-gradient(90deg,rgba(255,255,255,0.04),rgba(255,255,255,0.06));}
-  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-  .panel{background:linear-gradient(180deg,#0b1320,#071127);border-radius:14px;padding:18px;width:320px;box-shadow:0 8px 20px rgba(2,6,23,0.6);text-align:center}
-  .big{font-size:20px;font-weight:800;margin-bottom:8px}
-  .muted{font-size:13px;color:#9fb2cc}
-  .play-btn{margin-top:12px;background:linear-gradient(90deg,#6ef0b1,#4ad0ff);color:#031021;padding:12px 14px;border-radius:12px;font-weight:900}
-  footer{position:absolute;bottom:12px;left:12px;right:12px;display:flex;justify-content:center}
-  .tip{background:rgba(255,255,255,0.03);padding:8px 12px;border-radius:999px;font-size:12px}
-  /* mobile-friendly touch targets */
-  .action-btn{width:86px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800}
+  body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; font-family:sans-serif; }
+  canvas { background:linear-gradient(180deg,#071127,#0b1020); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); }
+  #overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); color:white; flex-direction:column; }
+  button { margin-top:12px; padding:10px 16px; border:none; border-radius:8px; background:#6ef0b1; font-weight:bold; cursor:pointer; }
 </style>
 </head>
 <body>
-  <div class="game-shell" id="shell">
-    <header>
-      <div class="logo"><div class="badge">LW</div><div class="top-info"><div style="font-weight:800">LAST WAR</div><div class="small">Ad-style demo • 30s</div></div></div>
-      <div class="top-info">Stage 1 - RUSH</div>
-    </header>
-
-    <div class="screen">
-      <div class="banner-flash"></div>
-
-      <div class="ad-banner">
-        <div class="ad-left">
-          <div style="font-weight:800;font-size:15px">Swipe, Merge, Dominate</div>
-          <div class="muted">Experience the ad — quick missions, instant upgrades, crazy combos.</div>
-          <div class="cta" id="skipCta">Play the ad</div>
-        </div>
-        <div class="ad-right" id="ad-right">x3 XP</div>
-      </div>
-
-      <canvas id="game" width="336" height="420"></canvas>
-
-      <div class="hud">
-        <div style="display:flex;gap:8px;align-items:center">
-          <div class="button small">Gold: <span id="gold">120</span></div>
-          <div class="button small">Wave: <span id="wave">1</span></div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <div class="action-btn button" id="spawnBtn">SPAWN</div>
-          <div class="action-btn button" id="mergeBtn">MERGE</div>
-        </div>
-      </div>
-
-      <footer><div class="tip">Tip: Tap spawn to drop a unit. Drag two units together to merge them into stronger units — just like the ads!</div></footer>
-
-      <div class="overlay" id="overlay">
-        <div class="panel">
-          <div class="big">AD-MODE: LAST WAR</div>
-          <div class="muted">This is a playful, ad-style microgame inspired by many mobile 'Last War' style ads.</div>
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
-            <button class="play-btn" id="startBtn">START MISSION</button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
+<canvas id="game" width="360" height="640"></canvas>
+<div id="overlay">
+  <h2>Last War Runner</h2>
+  <p>Swipe or use arrow keys to dodge obstacles and collect allies!</p>
+  <button id="startBtn">Start</button>
+</div>
 <script>
-// Simple ad-style mini-game: spawn units, merge, fight waves.
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const overlay = document.getElementById('overlay');
-const goldEl = document.getElementById('gold');
-const waveEl = document.getElementById('wave');
-let gold = 120;
-let wave = 1;
-let units = [];
-let enemies = [];
-let mode = 'idle'; // idle | running | result
-const lanes = 3;
-const laneYs = [60, 180, 300];
-const spawnCost = 40;
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const overlay=document.getElementById('overlay');
+const startBtn=document.getElementById('startBtn');
 
-function rand(min,max){return Math.random()*(max-min)+min}
+// game state
+let running=false;
+let player={lane:1,y:520,size:40}; // lane: 0 left, 1 middle, 2 right
+let laneX=[90,180,270];
+let obstacles=[];
+let pickups=[];
+let speed=3;
+let score=0;
 
-class Unit{
-  constructor(x,y,level=1){this.x=x;this.y=y;this.level=level;this.hp=20*level;this.atk=6*level;this.size=28+level*6;this.merging=false}
-  draw(){ctx.fillStyle = '#6ef0b1';ctx.beginPath();ctx.roundRect(this.x-this.size/2,this.y-this.size/2,this.size,this.size,8);ctx.fill();ctx.fillStyle='#022';ctx.font='12px sans-serif';ctx.textAlign='center';ctx.fillText('U'+this.level,this.x,this.y+4)}
-  update(){// simple AI: target nearest enemy in same lane
-    let target = enemies.filter(e=>Math.abs(e.y-this.y)<30)[0];
-    if(target){ // move toward enemy
-      if(Math.abs(target.x - this.x) > 34){ this.x += (target.x>this.x?1.2: -1.2); }
-      else { // attack
-        target.hp -= this.atk*0.06;}
-    } else { // advance right
-      if(this.x < canvas.width - 40) this.x += 0.6;}
-  }
-}
-class Enemy{
-  constructor(x,y,level=1){this.x=x;this.y=y;this.level=level;this.hp=18*level;this.size=28+level*6}
-  draw(){ctx.fillStyle = '#ff7a7a';ctx.beginPath();ctx.roundRect(this.x-this.size/2,this.y-this.size/2,this.size,this.size,8);ctx.fill();ctx.fillStyle='#111';ctx.font='12px sans-serif';ctx.textAlign='center';ctx.fillText('E'+this.level,this.x,this.y+4)}
-  update(){ // move left
-    if(this.x>20) this.x -= 0.4+this.level*0.03;
-    // attack units in range
-    const target = units.find(u=>Math.abs(u.y-this.y)<30 && Math.abs(u.x - this.x) < 36);
-    if(target){ target.hp -= (4+this.level)*0.04; }
-  }
+function resetGame(){
+  player.lane=1;
+  obstacles=[];
+  pickups=[];
+  score=0;
+  speed=3;
 }
 
-// utility: rounded rect (modern browsers)
-CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){ if(typeof r==='undefined') r=6; this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); }
+function spawnObstacle(){
+  const lane=Math.floor(Math.random()*3);
+  obstacles.push({lane:lane,y:-40,size:40});
+}
 
-function spawnUnit(laneIndex){ if(gold < spawnCost) return flashGold(); gold -= spawnCost; goldEl.textContent = gold; const y = laneYs[laneIndex]; units.push(new Unit(44,y,1)); shakeScreen(2)}
-function spawnEnemyWave(){ const num = 2 + wave; for(let i=0;i<num;i++){ const lane = Math.floor(Math.random()*lanes); const y = laneYs[lane]; enemies.push(new Enemy(canvas.width - 40 + i*40, y, Math.ceil(wave/2))); } }
+function spawnPickup(){
+  const lane=Math.floor(Math.random()*3);
+  pickups.push({lane:lane,y:-30,size:24});
+}
 
-function flashGold(){ const el = goldEl; el.style.transition='transform 0.12s'; el.style.transform='scale(1.18)'; setTimeout(()=>{el.style.transform='';},140)}
-let screenShake = 0;
-function shakeScreen(v){ screenShake = Math.max(screenShake,v); }
+function update(){
+  // move obstacles and pickups
+  obstacles.forEach(o=>o.y+=speed);
+  pickups.forEach(p=>p.y+=speed);
 
-let dragging = null;
-let dragOffset = {x:0,y:0};
-canvas.addEventListener('pointerdown',(e)=>{
-  if(mode!=='running') return;
-  const rect=canvas.getBoundingClientRect(); const x = (e.clientX-rect.left)*(canvas.width/rect.width); const y=(e.clientY-rect.top)*(canvas.height/rect.height);
-  // find topmost unit under pointer
-  for(let i=units.length-1;i>=0;i--){ const u=units[i]; if(Math.hypot(u.x-x,u.y-y) < u.size/2){ dragging = u; dragOffset.x = x-u.x; dragOffset.y = y-u.y; break; }}
+  // collision check
+  for(let i=0;i<obstacles.length;i++){
+    const o=obstacles[i];
+    if(o.lane===player.lane && Math.abs(o.y-player.y)<40){
+      running=false; // game over
+      overlay.style.display='flex';
+      overlay.innerHTML=`<h2>Game Over</h2><p>Score: ${score}</p><button onclick=\"location.reload()\">Restart</button>`;
+    }
+  }
+  for(let i=0;i<pickups.length;i++){
+    const p=pickups[i];
+    if(p.lane===player.lane && Math.abs(p.y-player.y)<40){
+      score+=10;
+      pickups.splice(i,1);
+      i--;
+    }
+  }
+
+  // remove off-screen
+  obstacles=obstacles.filter(o=>o.y<canvas.height+40);
+  pickups=pickups.filter(p=>p.y<canvas.height+40);
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // draw lanes
+  ctx.strokeStyle='rgba(255,255,255,0.1)';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(120,0); ctx.lineTo(120,640);
+  ctx.moveTo(240,0); ctx.lineTo(240,640);
+  ctx.stroke();
+
+  // draw player
+  ctx.fillStyle='#6ef0b1';
+  ctx.fillRect(laneX[player.lane]-player.size/2,player.y-player.size/2,player.size,player.size);
+
+  // draw obstacles
+  ctx.fillStyle='#ff7a7a';
+  obstacles.forEach(o=>{
+    ctx.fillRect(laneX[o.lane]-o.size/2,o.y-o.size/2,o.size,o.size);
+  });
+
+  // draw pickups
+  ctx.fillStyle='#ffd86b';
+  pickups.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(laneX[p.lane],p.y,p.size/2,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  // score
+  ctx.fillStyle='#fff';
+  ctx.font='16px sans-serif';
+  ctx.fillText(`Score: ${score}`,12,24);
+}
+
+let lastSpawn=0;
+let lastPickup=0;
+function loop(timestamp){
+  if(!running) return;
+  update();
+  draw();
+
+  if(timestamp-lastSpawn>1200){
+    spawnObstacle();
+    lastSpawn=timestamp;
+  }
+  if(timestamp-lastPickup>2000){
+    spawnPickup();
+    lastPickup=timestamp;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// controls
+window.addEventListener('keydown',e=>{
+  if(!running) return;
+  if(e.key==='ArrowLeft'&&player.lane>0) player.lane--;
+  if(e.key==='ArrowRight'&&player.lane<2) player.lane++;
 });
-canvas.addEventListener('pointermove',(e)=>{ if(!dragging) return; const rect=canvas.getBoundingClientRect(); const x=(e.clientX-rect.left)*(canvas.width/rect.width); const y=(e.clientY-rect.top)*(canvas.height/rect.height); dragging.x = x-dragOffset.x; dragging.y = y-dragOffset.y; });
-canvas.addEventListener('pointerup',(e)=>{ if(!dragging) return; // check for merge
-  for(let other of units){ if(other!==dragging && !other.merging && Math.hypot(other.x-dragging.x,other.y-dragging.y) < (other.size+dragging.size)/2 ){ // merge!
-      other.level = Math.min(6, other.level + dragging.level);
-      other.hp += dragging.hp*0.5; other.atk += dragging.atk*0.6; other.size = 28+other.level*6; other.merging=true; setTimeout(()=>other.merging=false,300);
-      units = units.filter(u=>u!==dragging);
-      gold += 8*other.level; goldEl.textContent = gold; shakeScreen(6);
-      break;
-    }}
-  dragging=null; });
 
-// UI buttons
-document.getElementById('startBtn').addEventListener('click',()=>{overlay.style.display='none'; mode='running'; spawnEnemyWave();})
-document.getElementById('spawnBtn').addEventListener('click',()=>{ // spawn in random lane
-  const lane = Math.floor(Math.random()*lanes); spawnUnit(lane);
+let touchStartX=null;
+canvas.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;});
+canvas.addEventListener('touchend',e=>{
+  if(touchStartX===null) return;
+  let dx=e.changedTouches[0].clientX-touchStartX;
+  if(Math.abs(dx)>30){
+    if(dx<0 && player.lane>0) player.lane--;
+    if(dx>0 && player.lane<2) player.lane++;
+  }
+  touchStartX=null;
 });
 
-// simple merge button: attempt to auto-merge nearest same-level units
-document.getElementById('mergeBtn').addEventListener('click',()=>{ if(units.length<2) return; // find pair
-  for(let i=0;i<units.length;i++){ for(let j=i+1;j<units.length;j++){ if(units[i].level===units[j].level){ // snap j onto i
-      units[i].level++; units[i].hp += units[j].hp*0.6; units[i].size=28+units[i].level*6; units.splice(j,1); gold+=6*units[i].level; goldEl.textContent=gold; shakeScreen(5); return; } }} flashGold(); });
-
-// visual helpers
-function drawBackground(){ ctx.clearRect(0,0,canvas.width,canvas.height); // lanes
-  ctx.fillStyle='rgba(255,255,255,0.02)'; for(let i=0;i<lanes;i++){ ctx.fillRect(0,laneYs[i]-40,canvas.width,80); }
-}
-
-function update(dt){ units.forEach(u=>u.update()); enemies.forEach(e=>e.update());
-  // remove dead
-  const removedEnemies = enemies.filter(e=>e.hp<=0).length; if(removedEnemies){ enemies = enemies.filter(e=>e.hp>0); gold += removedEnemies*10; goldEl.textContent = gold; }
-  units = units.filter(u=>u.hp>0);
-  // progress wave: if all enemies removed, start next wave after delay
-  if(enemies.length===0 && mode==='running'){ wave++; waveEl.textContent=wave; setTimeout(()=>{ spawnEnemyWave(); }, 900);
-  }
-}
-
-let last=0;
-function loop(t){ if(!last) last=t; const dt=(t-last)/1000; last=t;
-  if(screenShake>0){ const s = screenShake; const ox = (Math.random()*2-1)*s; const oy = (Math.random()*2-1)*s; canvas.style.transform = `translate(${ox}px,${oy}px)`; screenShake = Math.max(0, screenShake- (dt*8)); } else canvas.style.transform='';
-  drawBackground();
-  // draw units & enemies sorted by y
-  const drawables = [...units,...enemies].sort((a,b)=>a.y-b.y);
-  drawables.forEach(d=>d.draw());
-  // HUD overlays on canvas
-  ctx.fillStyle='rgba(0,0,0,0.14)'; ctx.fillRect(6,6,120,26); ctx.fillStyle='#fff'; ctx.font='12px sans-serif'; ctx.fillText('Ad-style mini-game',12,24);
-  update(dt);
-  last=t; requestAnimationFrame(loop);
-}
-
-requestAnimationFrame(loop);
-
-// tiny polish: clicking ad-right spawns 3x enemies to mimic ad's ridiculousness
-document.getElementById('ad-right').addEventListener('click',()=>{ for(let i=0;i<3;i++) spawnUnit(i%lanes); shakeScreen(8); });
-
-document.getElementById('skipCta').addEventListener('click',()=>{ overlay.style.display='none'; mode='running'; spawnEnemyWave(); })
-
-// make the game interactive even when idle: gentle animation
-setInterval(()=>{
-  if(mode!=='running'){
-    units.forEach(u=>{ u.x += Math.sin(Math.random()*6)*0.6; });
-  }
-},300);
-
+startBtn.addEventListener('click',()=>{
+  resetGame();
+  overlay.style.display='none';
+  running=true;
+  requestAnimationFrame(loop);
+});
 </script>
 </body>
 </html>
