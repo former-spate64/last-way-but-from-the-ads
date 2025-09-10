@@ -3,139 +3,178 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Runner - Humanoid Player</title>
+<title>3D Runner - Endless Road Segments</title>
 <style>
   body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; overflow:hidden; }
-  canvas { border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); background:linear-gradient(180deg,#071127,#0b1020); }
+  canvas { border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); cursor:pointer; }
 </style>
 </head>
 <body>
 <canvas id="game" width="400" height="640"></canvas>
 <script>
-const canvas=document.getElementById('game');
-const ctx=canvas.getContext('2d');
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-let tick=0;
-let running=true;
-let player={x:canvas.width/2,bob:0,vx:0};
-const roadWidth=200;
-const maxSpeed=5;
+let tick = 0;
+let running = false;
+let player = { x: canvas.width/2, bob:0, vx:0 };
+const roadWidth = 200;
+const playerSpeed = 5;
+const horizon = 200;
+const laneCount = 3;
+const segmentHeight = 40;
+const roadSpeed = 2; // pixels per frame
 
-// create a simple 3D humanoid sprite
+// Road segments pool
+let roadSegments = [];
+
 function createHumanoidSprite(){
   const size=40;
   const c=document.createElement('canvas');
   c.width=size; c.height=size;
   const ctx=c.getContext('2d');
-
-  // body
   const gradBody=ctx.createLinearGradient(0,size*0.25,0,size);
   gradBody.addColorStop(0,'#4cc79e');
   gradBody.addColorStop(1,'#2a7d5a');
   ctx.fillStyle=gradBody;
   ctx.fillRect(size*0.25,size*0.25,size*0.5,size*0.5);
-
-  // head
   const gradHead=ctx.createLinearGradient(0,0,0,size*0.25);
   gradHead.addColorStop(0,'#ffd6a5');
   gradHead.addColorStop(1,'#e6b684');
   ctx.fillStyle=gradHead;
   ctx.fillRect(size*0.35,0,size*0.3,size*0.25);
-
-  // legs
   ctx.fillStyle='#3ba37a';
   ctx.fillRect(size*0.25,size*0.75,size*0.15,size*0.25);
   ctx.fillRect(size*0.6,size*0.75,size*0.15,size*0.25);
-
-  // arms
   ctx.fillRect(0.1*size,size*0.25,0.15*size,size*0.4);
   ctx.fillRect(0.75*size,size*0.25,0.15*size,size*0.4);
-
   const img=new Image();
   img.src=c.toDataURL();
   return img;
 }
-
 const playerImg=createHumanoidSprite();
 
-function project(z){
-  const scale=1/(z*0.003+0.2);
-  const y=canvas.height - z*0.5;
-  return {scale,y};
+function initRoad(){
+  roadSegments = [];
+  let y = canvas.height - segmentHeight;
+  while(y > horizon - segmentHeight){
+    roadSegments.push({y: y});
+    y -= segmentHeight;
+  }
+}
+
+function drawBackground(){
+  if(!running){
+    ctx.fillStyle='#3b7ddd';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='white';
+    ctx.font='30px Arial';
+    ctx.textAlign='center';
+    ctx.fillText('3D Runner',canvas.width/2,canvas.height/2-20);
+    ctx.font='20px Arial';
+    ctx.fillText('Click to Play',canvas.width/2,canvas.height/2+20);
+    return;
+  }
+  ctx.fillStyle='#3d1c1c';
+  ctx.fillRect(0,0,canvas.width,horizon);
+  ctx.fillStyle='#222';
+  const ruinPositions=[50,120,190,260,330];
+  for(let i=0;i<ruinPositions.length;i++){
+    const w=30+Math.random()*10;
+    const h=30+Math.random()*40;
+    const x=ruinPositions[i];
+    ctx.fillRect(x,horizon-h,w,h);
+  }
+  ctx.fillStyle='#2a2a2a';
+  ctx.fillRect(0,horizon,canvas.width,horizon);
 }
 
 function drawRoad(){
-  const segments=20;
-  for(let i=0;i<segments;i++){
-    const z=i*50;
-    const {scale,y}=project(z);
-    const w=roadWidth*scale;
+  for(let i=0;i<roadSegments.length;i++){
+    const seg = roadSegments[i];
+    const t0 = (seg.y-canvas.height)/(horizon-canvas.height);
+    const t1 = (seg.y-segmentHeight-canvas.height)/(horizon-canvas.height);
+    const y0 = seg.y;
+    const y1 = seg.y - segmentHeight;
+    const w0 = roadWidth * (1-t0*0.8);
+    const w1 = roadWidth * (1-t1*0.8);
 
-    // road
     ctx.fillStyle='#444';
     ctx.beginPath();
-    ctx.moveTo(canvas.width/2-w/2,y);
-    ctx.lineTo(canvas.width/2+w/2,y);
-    ctx.lineTo(canvas.width/2+w/2,y+50*scale);
-    ctx.lineTo(canvas.width/2-w/2,y+50*scale);
+    ctx.moveTo(canvas.width/2-w0/2,y0);
+    ctx.lineTo(canvas.width/2+w0/2,y0);
+    ctx.lineTo(canvas.width/2+w1/2,y1);
+    ctx.lineTo(canvas.width/2-w1/2,y1);
     ctx.closePath();
     ctx.fill();
 
-    // lane line
-    if(i%2===0){
-      ctx.strokeStyle='#fff';
-      ctx.lineWidth=2*scale;
-      ctx.setLineDash([10*scale,10*scale]);
+    for(let lane=1;lane<laneCount;lane++){
+      const lx0=canvas.width/2 - w0/2 + (w0/laneCount)*lane;
+      const lx1=canvas.width/2 - w1/2 + (w1/laneCount)*lane;
+      ctx.strokeStyle='white';
+      ctx.lineWidth=2;
+      ctx.setLineDash([10,10]);
       ctx.beginPath();
-      ctx.moveTo(canvas.width/2,y+25*scale);
-      ctx.lineTo(canvas.width/2,y+50*scale);
+      ctx.moveTo(lx0,y0);
+      ctx.lineTo(lx1,y1);
       ctx.stroke();
       ctx.setLineDash([]);
     }
+  }
+}
 
-    // road edges
-    ctx.strokeStyle='#222';
-    ctx.lineWidth=1*scale;
-    ctx.strokeRect(canvas.width/2-w/2,y,w,50*scale);
+function updateRoad(){
+  for(let i=0;i<roadSegments.length;i++){
+    roadSegments[i].y += roadSpeed;
+  }
+  // Remove off-screen segments
+  while(roadSegments.length && roadSegments[0].y > canvas.height){
+    roadSegments.shift();
+  }
+  // Add new segment at top if needed
+  while(roadSegments.length && roadSegments[roadSegments.length-1].y > horizon){
+    const topY = roadSegments[roadSegments.length-1].y - segmentHeight;
+    roadSegments.push({y: topY});
   }
 }
 
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   tick++;
-  player.bob=Math.sin(tick*0.1)*5;
-
+  drawBackground();
+  if(!running) return;
+  player.bob = Math.sin(tick*0.1)*5;
   drawRoad();
-
   const size=40;
-  ctx.drawImage(playerImg,player.x-size/2,canvas.height-100+player.bob,size,size);
+  ctx.drawImage(playerImg,player.x-size/2,canvas.height-120+player.bob,size,size);
 }
 
 function update(){
-  // smooth horizontal movement
-  player.x+=player.vx;
+  if(!running) return;
+  player.x += player.vx;
+  updateRoad();
   const halfRoad=roadWidth/2-20;
   if(player.x<canvas.width/2-halfRoad) player.x=canvas.width/2-halfRoad;
   if(player.x>canvas.width/2+halfRoad) player.x=canvas.width/2+halfRoad;
-  player.vx*=0.9;
 }
 
 function loop(){
-  if(!running) return;
   update();
   draw();
   requestAnimationFrame(loop);
 }
 
-// controls
 const keys={};
 window.addEventListener('keydown',e=>{keys[e.key]=true;});
 window.addEventListener('keyup',e=>{keys[e.key]=false;});
 function handleInput(){
-  if(keys['ArrowLeft']) player.vx=-5;
-  else if(keys['ArrowRight']) player.vx=5;
+  if(!running) return;
+  if(keys['ArrowLeft']) player.vx=-playerSpeed;
+  else if(keys['ArrowRight']) player.vx=playerSpeed;
+  else player.vx=0;
 }
 setInterval(handleInput,16);
+canvas.addEventListener('click',()=>{ running=true; initRoad(); });
 loop();
 </script>
 </body>
