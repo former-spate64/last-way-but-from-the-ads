@@ -3,41 +3,28 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Last War 3D Runner Sprites</title>
+<title>3D Runner - Solo</title>
 <style>
-  body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; font-family:sans-serif; overflow:hidden; }
-  canvas { background:linear-gradient(180deg,#071127,#0b1020); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); }
-  #overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); color:white; flex-direction:column; }
-  button { margin-top:12px; padding:10px 16px; border:none; border-radius:8px; background:#6ef0b1; font-weight:bold; cursor:pointer; }
+  body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; overflow:hidden; }
+  canvas { border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); background:linear-gradient(180deg,#071127,#0b1020); }
 </style>
 </head>
 <body>
 <canvas id="game" width="400" height="640"></canvas>
-<div id="overlay">
-  <h2>Last War 3D Runner</h2>
-  <p>Arrow keys or swipe to move lanes.</p>
-  <button id="startBtn">Start</button>
-</div>
 <script>
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
-const overlay=document.getElementById('overlay');
-const startBtn=document.getElementById('startBtn');
 
-let running=false;
-let score=0;
-let speed=4;
-const laneCount=3;
-let player={lane:1};
-let objects=[];
+let laneCount=3;
+let player={lane:1,bob:0};
+let tick=0;
+let running=true;
 
-// function to create a pseudo-3D cube sprite
+// generate player sprite
 function createCubeSprite(color1,color2,color3,size=40){
   const c=document.createElement('canvas');
   c.width=size; c.height=size;
   const ctx=c.getContext('2d');
-
-  // top face
   ctx.fillStyle=color1;
   ctx.beginPath();
   ctx.moveTo(size*0.25,0);
@@ -46,8 +33,6 @@ function createCubeSprite(color1,color2,color3,size=40){
   ctx.lineTo(0,size*0.25);
   ctx.closePath();
   ctx.fill();
-
-  // side face
   ctx.fillStyle=color2;
   ctx.beginPath();
   ctx.moveTo(size*0.75,0);
@@ -56,132 +41,63 @@ function createCubeSprite(color1,color2,color3,size=40){
   ctx.lineTo(size*0.75,size);
   ctx.closePath();
   ctx.fill();
-
-  // front face
   ctx.fillStyle=color3;
   ctx.fillRect(size*0.25,size*0.25,size*0.5,size*0.75);
-
   const img=new Image();
   img.src=c.toDataURL();
   return img;
 }
-
-// generate sprites
 const playerImg=createCubeSprite('#6ef0b1','#4cc79e','#3ba37a');
-const enemyImg=createCubeSprite('#ff7a7a','#e34f4f','#c22d2d');
-const pickupImg=createCubeSprite('#ffd86b','#e6b84f','#c28c2d');
 
-function resetGame(){
-  score=0;
-  speed=4;
-  player.lane=1;
-  objects=[];
-}
-
+// project function for perspective
 function project(z){
   const scale=1/(z*0.003+0.2);
   const y=canvas.height - z*0.5;
   return {scale,y};
 }
 
-function spawnObject(type){
-  const lane=Math.floor(Math.random()*laneCount);
-  objects.push({lane,z:1000,type});
-}
-
-function update(){
-  objects.forEach(o=>o.z-=speed);
-  for(let i=0;i<objects.length;i++){
-    let o=objects[i];
-    if(o.z<80){
-      if(o.lane===player.lane){
-        if(o.type==='obstacle'){
-          running=false;
-          overlay.style.display='flex';
-          overlay.innerHTML=`<h2>Game Over</h2><p>Score: ${score}</p><button onclick=\"location.reload()\">Restart</button>`;
-        }
-        if(o.type==='pickup'){
-          score+=10;
-        }
-      }
-      objects.splice(i,1); i--;
-    }
+function drawRoad(){
+  const segments=20;
+  for(let i=0;i<segments;i++){
+    const z=i*50;
+    const {scale,y}=project(z);
+    const roadWidth=200*scale;
+    ctx.fillStyle=i%2===0?'#1a2a3a':'#162135';
+    ctx.beginPath();
+    ctx.moveTo(canvas.width/2-roadWidth/2,y);
+    ctx.lineTo(canvas.width/2+roadWidth/2,y);
+    ctx.lineTo(canvas.width/2+roadWidth/2,y+50*scale);
+    ctx.lineTo(canvas.width/2-roadWidth/2,y+50*scale);
+    ctx.closePath();
+    ctx.fill();
   }
-
-  if(Math.random()<0.02) spawnObject('obstacle');
-  if(Math.random()<0.01) spawnObject('pickup');
-
-  speed+=0.001;
 }
 
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  tick++;
+  player.bob=Math.sin(tick*0.1)*5;
 
-  // platform
-  ctx.fillStyle='#1a2a3a';
-  ctx.beginPath();
-  ctx.moveTo(60,canvas.height);
-  ctx.lineTo(340,canvas.height);
-  ctx.lineTo(250,100);
-  ctx.lineTo(150,100);
-  ctx.closePath();
-  ctx.fill();
+  drawRoad();
 
-  // lane lines
-  ctx.strokeStyle='rgba(255,255,255,0.2)';
-  ctx.beginPath();
-  ctx.moveTo(170,100); ctx.lineTo(110,canvas.height);
-  ctx.moveTo(230,100); ctx.lineTo(290,canvas.height);
-  ctx.stroke();
-
-  const laneX=[140,200,260];
-  objects.forEach(o=>{
-    const {scale,y}=project(o.z);
-    const size=40*scale;
-    if(o.type==='obstacle') ctx.drawImage(enemyImg,laneX[o.lane]-size/2,y-size/2,size,size);
-    else ctx.drawImage(pickupImg,laneX[o.lane]-size/2,y-size/2,size,size);
-  });
-
+  const laneX=[canvas.width/2-50,canvas.width/2,canvas.width/2+50];
   const size=40;
-  ctx.drawImage(playerImg,laneX[player.lane]-size/2,canvas.height-80,size,size);
-
-  ctx.fillStyle='#fff';
-  ctx.font='16px sans-serif';
-  ctx.fillText(`Score: ${score}`,12,24);
+  ctx.drawImage(playerImg,laneX[player.lane]-size/2,canvas.height-100+player.bob,size,size);
 }
 
 function loop(){
   if(!running) return;
-  update();
   draw();
   requestAnimationFrame(loop);
 }
 
 // controls
 window.addEventListener('keydown',e=>{
-  if(!running) return;
   if(e.key==='ArrowLeft'&&player.lane>0) player.lane--;
   if(e.key==='ArrowRight'&&player.lane<2) player.lane++;
 });
 
-let touchStartX=null;
-canvas.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;});
-canvas.addEventListener('touchend',e=>{
-  if(touchStartX===null) return;
-  let dx=e.changedTouches[0].clientX-touchStartX;
-  if(Math.abs(dx)>30){
-    if(dx<0 && player.lane>0) player.lane--;
-    if(dx>0 && player.lane<2) player.lane++;
-  }
-  touchStartX=null;
-});
-
-startBtn.addEventListener('click',()=>{
-  resetGame();
-  overlay.style.display='none';
-  running=true;
-  requestAnimationFrame(loop);
-});
+loop();
 </script>
 </body>
 </html>
