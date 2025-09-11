@@ -3,202 +3,144 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Runner - Multiplier Wall</title>
+<title>3D Runner - Fluid Crowd (3D Stickmen)</title>
 <style>
-  body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; overflow:hidden; }
-  canvas { border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); cursor:pointer; }
+  body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#071020; overflow:hidden; }
+  canvas { border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.6); }
 </style>
 </head>
 <body>
-<canvas id="game" width="400" height="640"></canvas>
+<canvas id="game" width="420" height="720"></canvas>
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// --- Config ---
 let tick = 0;
 let running = false;
-let player = { x: canvas.width/2, bob:0, vx:0 };
-const roadWidth = 200;
-const playerSpeed = 5;
-const horizon = 200;
+const roadWidth = 260;
+const playerSpeed = 3;
+const horizon = 220;
+const segmentHeight = 44;
+const roadScroll = 1.6;
 const laneCount = 3;
-const segmentHeight = 40;
-const roadSpeed = 2;
+const maxPlayers = 120;
+
+// Crowd parameters
+const minZ = -20;
+const maxZ = 80;
+const forwardSpeed = 0.2;
+
 let roadSegments = [];
-let players = [{...player}];
+let players = [];
+let formationInput = 0;
 
 // Wall setup
-let wallY = horizon + 100;
-let lastWallTime = 0;
-const wallCooldown = 5000; // spawn wall every 5 seconds
+let wall = { y: horizon + 60, active: false, width:120, height:120, id:0 };
+let lastWallSpawn = Date.now();
+const wallInterval = 5000;
 
-function createHumanoidSprite(){
-  const size=40;
-  const c=document.createElement('canvas');
-  c.width=size; c.height=size;
-  const ctx=c.getContext('2d');
-  const gradBody=ctx.createLinearGradient(0,size*0.25,0,size);
-  gradBody.addColorStop(0,'#4cc79e');
-  gradBody.addColorStop(1,'#2a7d5a');
-  ctx.fillStyle=gradBody;
-  ctx.fillRect(size*0.25,size*0.25,size*0.5,size*0.5);
-  const gradHead=ctx.createLinearGradient(0,0,0,size*0.25);
-  gradHead.addColorStop(0,'#ffd6a5');
-  gradHead.addColorStop(1,'#e6b684');
-  ctx.fillStyle=gradHead;
-  ctx.fillRect(size*0.35,0,size*0.3,size*0.25);
-  ctx.fillStyle='#3ba37a';
-  ctx.fillRect(size*0.25,size*0.75,size*0.15,size*0.25);
-  ctx.fillRect(size*0.6,size*0.75,size*0.15,size*0.25);
-  ctx.fillRect(0.1*size,size*0.25,0.15*size,size*0.4);
-  ctx.fillRect(0.75*size,size*0.25,0.15*size,size*0.4);
-  const img=new Image();
-  img.src=c.toDataURL();
-  return img;
+// Utility
+function rand(a,b){return a + Math.random()*(b-a);}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function lerp(a,b,t){return a + (b-a)*t;}
+
+function createPlayer(x = 0, z = 10){
+  return { x, z, vx:0, vz:0, phase: Math.random()*Math.PI*2, skin: `rgb(${Math.floor(rand(220,255))},${Math.floor(rand(170,220))},${Math.floor(rand(140,190))})`, shirtA: rand(0.6,0.9), lastWallId: -1 };
 }
-const playerImg=createHumanoidSprite();
 
+players = [createPlayer(0,10)];
+
+// --- Road functions ---
 function initRoad(){
   roadSegments = [];
-  let y = canvas.height - segmentHeight;
-  while(y > horizon - segmentHeight/2){
-    roadSegments.push({y: y});
+  let y = canvas.height - segmentHeight/2;
+  while(y > horizon - segmentHeight) {
+    roadSegments.push({y});
     y -= segmentHeight;
   }
 }
 
 function drawBackground(){
   if(!running){
-    ctx.fillStyle='#3b7ddd';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle='white';
-    ctx.font='30px Arial';
-    ctx.textAlign='center';
-    ctx.fillText('3D Runner',canvas.width/2,canvas.height/2-20);
-    ctx.font='20px Arial';
-    ctx.fillText('Click to Play',canvas.width/2,canvas.height/2+20);
+    ctx.fillStyle='#3b7ddd'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='white'; ctx.font='40px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Last War — Runner', canvas.width/2, canvas.height/2 - 24);
+    ctx.font='20px sans-serif'; ctx.fillText('Click to Start', canvas.width/2, canvas.height/2 + 16);
     return;
   }
-  ctx.fillStyle='#3d1c1c';
-  ctx.fillRect(0,0,canvas.width,horizon);
-  ctx.fillStyle='#222';
-  const ruinPositions=[50,120,190,260,330];
-  for(let i=0;i<ruinPositions.length;i++){
-    const w=30+Math.random()*10;
-    const h=30+Math.random()*40;
-    const x=ruinPositions[i];
-    ctx.fillRect(x,horizon-h,w,h);
+  const g = ctx.createLinearGradient(0,0,0,horizon);
+  g.addColorStop(0,'#2b1a1a'); g.addColorStop(1,'#444');
+  ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,horizon);
+  ctx.fillStyle='#151515';
+  const ruins = [40,120,200,280,360];
+  for(let i=0;i<ruins.length;i++){
+    const w = 24 + (i%2?Math.random()*30:Math.random()*10);
+    const h = 30 + Math.random()*70;
+    ctx.fillRect(ruins[i], horizon - h, w, h);
   }
-  ctx.fillStyle='#2a2a2a';
-  ctx.fillRect(0,horizon,canvas.width,horizon);
+  ctx.fillStyle='#1f1f1f'; ctx.fillRect(0,horizon,canvas.width,canvas.height-horizon);
 }
 
 function drawRoad(){
-  for(let i=0;i<roadSegments.length;i++){
-    const seg = roadSegments[i];
-    const t0 = (seg.y-canvas.height)/(horizon-canvas.height);
-    const t1 = (seg.y-segmentHeight-canvas.height)/(horizon-canvas.height);
-    const y0 = seg.y;
-    const y1 = seg.y - segmentHeight;
-    const w0 = roadWidth * (1-t0*0.8);
-    const w1 = roadWidth * (1-t1*0.8);
-
-    ctx.fillStyle='#444';
+  for(let s of roadSegments){
+    const t = (s.y - canvas.height) / (horizon - canvas.height);
+    const w0 = roadWidth * (1 - t*0.9);
+    const w1 = roadWidth * (1 - (t + segmentHeight/(canvas.height-horizon))*0.9);
+    const y0 = s.y; const y1 = s.y - segmentHeight;
+    ctx.fillStyle = '#444';
     ctx.beginPath();
-    ctx.moveTo(canvas.width/2-w0/2,y0);
-    ctx.lineTo(canvas.width/2+w0/2,y0);
-    ctx.lineTo(canvas.width/2+w1/2,y1);
-    ctx.lineTo(canvas.width/2-w1/2,y1);
-    ctx.closePath();
-    ctx.fill();
-
-    for(let lane=1;lane<laneCount;lane++){
-      const lx0=canvas.width/2 - w0/2 + (w0/laneCount)*lane;
-      const lx1=canvas.width/2 - w1/2 + (w1/laneCount)*lane;
-      ctx.strokeStyle='white';
-      ctx.lineWidth=2;
-      ctx.setLineDash([10,10]);
-      ctx.beginPath();
-      ctx.moveTo(lx0,y0);
-      ctx.lineTo(lx1,y1);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    ctx.moveTo(canvas.width/2 - w0/2, y0);
+    ctx.lineTo(canvas.width/2 + w0/2, y0);
+    ctx.lineTo(canvas.width/2 + w1/2, y1);
+    ctx.lineTo(canvas.width/2 - w1/2, y1);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([10,14]);
+    for(let lane=1; lane<laneCount; lane++){
+      const lx0 = canvas.width/2 - w0/2 + (w0/laneCount)*lane;
+      const lx1 = canvas.width/2 - w1/2 + (w1/laneCount)*lane;
+      ctx.beginPath(); ctx.moveTo(lx0,y0); ctx.lineTo(lx1,y1); ctx.stroke();
     }
+    ctx.setLineDash([]);
   }
 }
 
 function updateRoad(){
-  for(let i=0;i<roadSegments.length;i++){
-    roadSegments[i].y += roadSpeed;
-  }
-  while(roadSegments.length && roadSegments[0].y > canvas.height + segmentHeight){
-    roadSegments.shift();
-  }
-  while(roadSegments.length && roadSegments[roadSegments.length-1].y > horizon - segmentHeight){
-    const topY = roadSegments[roadSegments.length-1].y - segmentHeight;
+  for(let seg of roadSegments) seg.y += roadScroll;
+  while(roadSegments.length && roadSegments[0].y > canvas.height + segmentHeight) roadSegments.shift();
+  while(roadSegments.length==0 || roadSegments[roadSegments.length-1].y > horizon - segmentHeight*0.25){
+    const topY = (roadSegments.length? roadSegments[roadSegments.length-1].y - segmentHeight : canvas.height);
     roadSegments.push({y: topY});
   }
 }
 
-function drawPlayers(){
-  const size=40;
-  players.forEach(p => {
-    ctx.drawImage(playerImg,p.x-size/2,canvas.height-120+Math.sin(tick*0.1)*5,size,size);
-  });
-}
-
+// --- Crowd (fluid) behavior ---
 function updatePlayers(){
-  players.forEach(p => {
-    p.x += p.vx;
-    if(p.x<canvas.width/2-roadWidth/2+20) p.x = canvas.width/2-roadWidth/2+20;
-    if(p.x>canvas.width/2+roadWidth/2-20) p.x = canvas.width/2+roadWidth/2-20;
-  });
-}
-
-function checkWall(){
-  if(tick*16 - lastWallTime > wallCooldown){
-    lastWallTime = tick*16;
-    wallY = horizon + 50;
+  const avgX = players.reduce((s,p)=>s+p.x,0)/players.length;
+  const targetCenterX = lerp(avgX, formationInput ? (avgX + formationInput) : avgX, 0.25);
+  for(let i=0;i<players.length;i++){
+    const p = players[i];
+    p.z = clamp(p.z + (0.08 + Math.random()*0.02), minZ, maxZ);
+    let separationX=0, alignmentX=0, cohesionX=0, countNearby=0;
+    for(let j=0;j<players.length;j++){ if(i===j) continue; const o=players[j]; const dx=o.x-p.x; const dz=o.z-p.z; const dist=Math.sqrt(dx*dx+dz*dz); if(dist<48){ if(dist>0) separationX -= (dx/dist)*(48-dist)*0.02; alignmentX+=o.x; cohesionX+=o.x; countNearby++; } }
+    if(countNearby>0){ alignmentX/=countNearby; cohesionX/=countNearby; }
+    const wobble=(Math.random()-0.5)*0.6;
+    const targetX = lerp(p.x, avgX + (cohesionX? (cohesionX - p.x)*0.02 : 0), 0.12);
+    p.x += separationX + (alignmentX? (alignmentX - p.x)*0.01:0) + wobble;
+    p.x = lerp(p.x, targetX, 0.06);
+    const halfRoad = roadWidth/2 - 18;
+    const worldLeft = canvas.width/2 - halfRoad;
+    const worldRight = canvas.width/2 + halfRoad;
+    p.x = clamp(p.x, worldLeft, worldRight);
+    p.phase += 0.12 + Math.random()*0.02;
   }
-  // Draw wall
-  if(running){
-    ctx.fillStyle='rgba(255,0,0,0.5)';
-    ctx.fillRect(canvas.width/2 - 50, wallY, 100, 10);
-  }
-  // Check collision with wall (simple Y overlap)
-  players.forEach((p,i)=>{
-    if(Math.abs(canvas.height-120 - wallY) < 5){
-      let newPlayers = [];
-      players.forEach(pl => {
-        newPlayers.push({...pl});
-        newPlayers.push({...pl});
-      });
-      players = newPlayers;
-    }
-  });
+  formationInput = 0;
 }
 
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  tick++;
-  drawBackground();
-  if(!running) return;
-  drawRoad();
-  drawPlayers();
-  checkWall();
-}
-
-function update(){
-  if(!running) return;
-  updateRoad();
-  updatePlayers();
-}
-
-function loop(){
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-const keys={};
-window.addEventListener('keydown',e=>{keys[e.key]=true;
+// --- Wall handling ---
+function handleWall(){
+  const now = Date.now();
+  if(now - lastWallSpawn > wallInterval){ lastWallSpawn=now; wall.y=horizon; wall.active=true; wall.id++; }
+  if(wall.active) wall.y += roadScroll;
+  if(running && wall.active){ ctx.fillStyle='rgba(15,100,230,1)'; const wx=canvas.width/2-wall.width/2,wy=wall.y; ctx.fillRect(wx,wy,wall.width,wall.height); ctx.fillStyle='white'; ctx.font='28px sans-serif'; ctx.textAlign='center'; ctx.fillText('2X', canvas.width/2, wall.y + wall.height/2 +10); }
+  for(let i=players.length-1;i>=0;i--){ const p=players[i]; const playerScreenY = canvas.height-120-p.z; const wx=canvas.width/2-wall.width/2,wy=wall.y; if(wall.active && p.lastWallId!==wall.id && playerScreenY>wy && playerScreenY<wy+wall.height){ if(players.length<maxPlayers){ const left={...p,x:clamp(p.x-8, canvas.width/2-roadWidth/2+10, canvas.width/2+road
