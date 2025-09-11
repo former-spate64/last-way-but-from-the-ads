@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Runner - Endless Road Segments</title>
+<title>3D Runner - Multiplier Wall</title>
 <style>
   body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh; background:#0b1020; overflow:hidden; }
   canvas { border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.6); cursor:pointer; }
@@ -23,10 +23,14 @@ const playerSpeed = 5;
 const horizon = 200;
 const laneCount = 3;
 const segmentHeight = 40;
-const roadSpeed = 2; // pixels per frame
-
-// Road segments pool
+const roadSpeed = 2;
 let roadSegments = [];
+let players = [{...player}];
+
+// Wall setup
+let wallY = horizon + 100;
+let lastWallTime = 0;
+const wallCooldown = 5000; // spawn wall every 5 seconds
 
 function createHumanoidSprite(){
   const size=40;
@@ -57,7 +61,7 @@ const playerImg=createHumanoidSprite();
 function initRoad(){
   roadSegments = [];
   let y = canvas.height - segmentHeight;
-  while(y > horizon - segmentHeight){
+  while(y > horizon - segmentHeight/2){
     roadSegments.push({y: y});
     y -= segmentHeight;
   }
@@ -127,15 +131,51 @@ function updateRoad(){
   for(let i=0;i<roadSegments.length;i++){
     roadSegments[i].y += roadSpeed;
   }
-  // Remove off-screen segments
-  while(roadSegments.length && roadSegments[0].y > canvas.height){
+  while(roadSegments.length && roadSegments[0].y > canvas.height + segmentHeight){
     roadSegments.shift();
   }
-  // Add new segment at top if needed
-  while(roadSegments.length && roadSegments[roadSegments.length-1].y > horizon){
+  while(roadSegments.length && roadSegments[roadSegments.length-1].y > horizon - segmentHeight){
     const topY = roadSegments[roadSegments.length-1].y - segmentHeight;
     roadSegments.push({y: topY});
   }
+}
+
+function drawPlayers(){
+  const size=40;
+  players.forEach(p => {
+    ctx.drawImage(playerImg,p.x-size/2,canvas.height-120+Math.sin(tick*0.1)*5,size,size);
+  });
+}
+
+function updatePlayers(){
+  players.forEach(p => {
+    p.x += p.vx;
+    if(p.x<canvas.width/2-roadWidth/2+20) p.x = canvas.width/2-roadWidth/2+20;
+    if(p.x>canvas.width/2+roadWidth/2-20) p.x = canvas.width/2+roadWidth/2-20;
+  });
+}
+
+function checkWall(){
+  if(tick*16 - lastWallTime > wallCooldown){
+    lastWallTime = tick*16;
+    wallY = horizon + 50;
+  }
+  // Draw wall
+  if(running){
+    ctx.fillStyle='rgba(255,0,0,0.5)';
+    ctx.fillRect(canvas.width/2 - 50, wallY, 100, 10);
+  }
+  // Check collision with wall (simple Y overlap)
+  players.forEach((p,i)=>{
+    if(Math.abs(canvas.height-120 - wallY) < 5){
+      let newPlayers = [];
+      players.forEach(pl => {
+        newPlayers.push({...pl});
+        newPlayers.push({...pl});
+      });
+      players = newPlayers;
+    }
+  });
 }
 
 function draw(){
@@ -143,19 +183,15 @@ function draw(){
   tick++;
   drawBackground();
   if(!running) return;
-  player.bob = Math.sin(tick*0.1)*5;
   drawRoad();
-  const size=40;
-  ctx.drawImage(playerImg,player.x-size/2,canvas.height-120+player.bob,size,size);
+  drawPlayers();
+  checkWall();
 }
 
 function update(){
   if(!running) return;
-  player.x += player.vx;
   updateRoad();
-  const halfRoad=roadWidth/2-20;
-  if(player.x<canvas.width/2-halfRoad) player.x=canvas.width/2-halfRoad;
-  if(player.x>canvas.width/2+halfRoad) player.x=canvas.width/2+halfRoad;
+  updatePlayers();
 }
 
 function loop(){
@@ -165,17 +201,4 @@ function loop(){
 }
 
 const keys={};
-window.addEventListener('keydown',e=>{keys[e.key]=true;});
-window.addEventListener('keyup',e=>{keys[e.key]=false;});
-function handleInput(){
-  if(!running) return;
-  if(keys['ArrowLeft']) player.vx=-playerSpeed;
-  else if(keys['ArrowRight']) player.vx=playerSpeed;
-  else player.vx=0;
-}
-setInterval(handleInput,16);
-canvas.addEventListener('click',()=>{ running=true; initRoad(); });
-loop();
-</script>
-</body>
-</html>
+window.addEventListener('keydown',e=>{keys[e.key]=true;
