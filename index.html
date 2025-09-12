@@ -15,132 +15,151 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// --- Utility ---
+function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+function lerp(a, b, t){ return a + (b-a)*t; }
+
 // --- Config ---
-let tick = 0;
-let running = false;
-const roadWidth = 260;
-const playerSpeed = 3;
-const horizon = 220;
-const segmentHeight = 44;
-const roadScroll = 1.6;
-const laneCount = 3;
-const maxPlayers = 120;
+let running=false;
+const roadWidth=260;
+const horizon=220;
+const segmentHeight=44;
+const roadScroll=0.6;
+const laneCount=3;
+const maxPlayers=120;
+const minZ=-20;
+const maxZ=80;
+let formationInput=0;
+const centerXScreen = canvas.width/2;
 
-// Crowd parameters
-const minZ = -20;
-const maxZ = 80;
-const forwardSpeed = 0.2;
-
-let roadSegments = [];
-let players = [];
-let formationInput = 0;
-
-// Wall setup
-let wall = { y: horizon + 60, active: false, width:120, height:120, id:0 };
-let lastWallSpawn = Date.now();
-const wallInterval = 5000;
-
-// Utility
-function rand(a,b){return a + Math.random()*(b-a);}
-function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
-function lerp(a,b,t){return a + (b-a)*t;}
-
-function createPlayer(x = 0, z = 10){
-  return { x, z, vx:0, vz:0, phase: Math.random()*Math.PI*2, skin: `rgb(${Math.floor(rand(220,255))},${Math.floor(rand(170,220))},${Math.floor(rand(140,190))})`, shirtA: rand(0.6,0.9), lastWallId: -1 };
-}
-
-players = [createPlayer(0,10)];
-
-// --- Road functions ---
+// --- Road ---
+let roadSegments=[];
 function initRoad(){
-  roadSegments = [];
-  let y = canvas.height - segmentHeight/2;
-  while(y > horizon - segmentHeight) {
-    roadSegments.push({y});
-    y -= segmentHeight;
+  roadSegments=[];
+  let y=canvas.height+segmentHeight;
+  while(y>horizon-segmentHeight){ roadSegments.push({y}); y-=segmentHeight; }
+}
+function updateRoad(){
+  for(let seg of roadSegments) seg.y+=roadScroll;
+  while(roadSegments.length && roadSegments[0].y>canvas.height+segmentHeight) roadSegments.shift();
+  while(roadSegments.length==0 || roadSegments[roadSegments.length-1].y>horizon-segmentHeight*0.25){
+    const topY=roadSegments.length?roadSegments[roadSegments.length-1].y-segmentHeight:canvas.height+segmentHeight;
+    roadSegments.push({y:topY});
   }
 }
-
-function drawBackground(){
-  if(!running){
-    ctx.fillStyle='#3b7ddd'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle='white'; ctx.font='40px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('Last War — Runner', canvas.width/2, canvas.height/2 - 24);
-    ctx.font='20px sans-serif'; ctx.fillText('Click to Start', canvas.width/2, canvas.height/2 + 16);
-    return;
-  }
-  const g = ctx.createLinearGradient(0,0,0,horizon);
-  g.addColorStop(0,'#2b1a1a'); g.addColorStop(1,'#444');
-  ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,horizon);
-  ctx.fillStyle='#151515';
-  const ruins = [40,120,200,280,360];
-  for(let i=0;i<ruins.length;i++){
-    const w = 24 + (i%2?Math.random()*30:Math.random()*10);
-    const h = 30 + Math.random()*70;
-    ctx.fillRect(ruins[i], horizon - h, w, h);
-  }
-  ctx.fillStyle='#1f1f1f'; ctx.fillRect(0,horizon,canvas.width,canvas.height-horizon);
-}
-
 function drawRoad(){
   for(let s of roadSegments){
-    const t = (s.y - canvas.height) / (horizon - canvas.height);
-    const w0 = roadWidth * (1 - t*0.9);
-    const w1 = roadWidth * (1 - (t + segmentHeight/(canvas.height-horizon))*0.9);
-    const y0 = s.y; const y1 = s.y - segmentHeight;
-    ctx.fillStyle = '#444';
-    ctx.beginPath();
-    ctx.moveTo(canvas.width/2 - w0/2, y0);
-    ctx.lineTo(canvas.width/2 + w0/2, y0);
-    ctx.lineTo(canvas.width/2 + w1/2, y1);
-    ctx.lineTo(canvas.width/2 - w1/2, y1);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([10,14]);
+    const t=(s.y-canvas.height)/(horizon-canvas.height);
+    const w0=roadWidth*(1-t*0.9);
+    const w1=roadWidth*(1-(t+segmentHeight/(canvas.height-horizon))*0.9);
+    const y0=s.y, y1=s.y-segmentHeight;
+    ctx.fillStyle='#444'; ctx.beginPath();
+    ctx.moveTo(centerXScreen-w0/2,y0); ctx.lineTo(centerXScreen+w0/2,y0);
+    ctx.lineTo(centerXScreen+w1/2,y1); ctx.lineTo(centerXScreen-w1/2,y1); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=2; ctx.setLineDash([10,14]);
     for(let lane=1; lane<laneCount; lane++){
-      const lx0 = canvas.width/2 - w0/2 + (w0/laneCount)*lane;
-      const lx1 = canvas.width/2 - w1/2 + (w1/laneCount)*lane;
+      const lx0=centerXScreen-w0/2+(w0/laneCount)*lane;
+      const lx1=centerXScreen-w1/2+(w1/laneCount)*lane;
       ctx.beginPath(); ctx.moveTo(lx0,y0); ctx.lineTo(lx1,y1); ctx.stroke();
     }
     ctx.setLineDash([]);
   }
 }
 
-function updateRoad(){
-  for(let seg of roadSegments) seg.y += roadScroll;
-  while(roadSegments.length && roadSegments[0].y > canvas.height + segmentHeight) roadSegments.shift();
-  while(roadSegments.length==0 || roadSegments[roadSegments.length-1].y > horizon - segmentHeight*0.25){
-    const topY = (roadSegments.length? roadSegments[roadSegments.length-1].y - segmentHeight : canvas.height);
-    roadSegments.push({y: topY});
-  }
+// --- Players ---
+let players=[];
+function createPlayer(x=centerXScreen,z=10){
+  const blueShade = 180 + Math.floor(Math.random()*50);
+  return { 
+    x, z, phase: Math.random()*Math.PI*2, bobPhase: Math.random()*Math.PI*2,
+    skin:`rgb(${Math.floor(Math.random()*55+200)},${Math.floor(Math.random()*60+160)},${Math.floor(Math.random()*50+140)})`,
+    shirt:`rgb(50,${blueShade},230)`, lastWallId:-1
+  };
 }
+players=[createPlayer()];
 
-// --- Crowd (fluid) behavior ---
 function updatePlayers(){
-  const avgX = players.reduce((s,p)=>s+p.x,0)/players.length;
-  const targetCenterX = lerp(avgX, formationInput ? (avgX + formationInput) : avgX, 0.25);
   for(let i=0;i<players.length;i++){
-    const p = players[i];
-    p.z = clamp(p.z + (0.08 + Math.random()*0.02), minZ, maxZ);
-    let separationX=0, alignmentX=0, cohesionX=0, countNearby=0;
-    for(let j=0;j<players.length;j++){ if(i===j) continue; const o=players[j]; const dx=o.x-p.x; const dz=o.z-p.z; const dist=Math.sqrt(dx*dx+dz*dz); if(dist<48){ if(dist>0) separationX -= (dx/dist)*(48-dist)*0.02; alignmentX+=o.x; cohesionX+=o.x; countNearby++; } }
-    if(countNearby>0){ alignmentX/=countNearby; cohesionX/=countNearby; }
-    const wobble=(Math.random()-0.5)*0.6;
-    const targetX = lerp(p.x, avgX + (cohesionX? (cohesionX - p.x)*0.02 : 0), 0.12);
-    p.x += separationX + (alignmentX? (alignmentX - p.x)*0.01:0) + wobble;
-    p.x = lerp(p.x, targetX, 0.06);
-    const halfRoad = roadWidth/2 - 18;
-    const worldLeft = canvas.width/2 - halfRoad;
-    const worldRight = canvas.width/2 + halfRoad;
-    p.x = clamp(p.x, worldLeft, worldRight);
-    p.phase += 0.12 + Math.random()*0.02;
+    const p=players[i];
+    p.z=clamp(p.z+roadScroll,minZ,maxZ);
+    let sepX=0, sepZ=0;
+    for(let j=0;j<players.length;j++){ 
+      if(i===j) continue; 
+      const o=players[j]; 
+      const dx=o.x-p.x; 
+      const dz=o.z-p.z; 
+      const dist=Math.sqrt(dx*dx+dz*dz);
+      if(dist<32){
+        const push=0.02*(32-dist);
+        sepX -= dx/dist * push;
+        sepZ -= dz/dist * push;
+      }
+    }
+    p.x += formationInput*0.05 + sepX;
+    p.z += sepZ;
+    const halfRoad=roadWidth/2-18;
+    p.x=clamp(p.x,centerXScreen-halfRoad,centerXScreen+halfRoad);
+    p.z=clamp(p.z,minZ,maxZ);
   }
-  formationInput = 0;
 }
 
-// --- Wall handling ---
+function drawPlayers(){
+  for(let p of players){
+    const x=p.x, y=canvas.height-120-p.z;
+    const headBob = Math.sin(Date.now()/200 + p.bobPhase)*2;
+    ctx.fillStyle=p.skin; ctx.beginPath(); ctx.arc(x,y-14+headBob,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=p.shirt; ctx.fillRect(x-6,y-8+headBob,12,12);
+    ctx.strokeStyle='black'; ctx.beginPath(); ctx.moveTo(x-6,y+4+headBob); ctx.lineTo(x-6,y+14+headBob);
+    ctx.moveTo(x+6,y+4+headBob); ctx.lineTo(x+6,y+14+headBob); ctx.stroke();
+  }
+}
+
+// --- Wall ---
+let wall={y:horizon+60,active:false,width:120,height:120,id:0};
+let lastWallSpawn=Date.now();
+const wallInterval=5000;
 function handleWall(){
-  const now = Date.now();
-  if(now - lastWallSpawn > wallInterval){ lastWallSpawn=now; wall.y=horizon; wall.active=true; wall.id++; }
-  if(wall.active) wall.y += roadScroll;
-  if(running && wall.active){ ctx.fillStyle='rgba(15,100,230,1)'; const wx=canvas.width/2-wall.width/2,wy=wall.y; ctx.fillRect(wx,wy,wall.width,wall.height); ctx.fillStyle='white'; ctx.font='28px sans-serif'; ctx.textAlign='center'; ctx.fillText('2X', canvas.width/2, wall.y + wall.height/2 +10); }
-  for(let i=players.length-1;i>=0;i--){ const p=players[i]; const playerScreenY = canvas.height-120-p.z; const wx=canvas.width/2-wall.width/2,wy=wall.y; if(wall.active && p.lastWallId!==wall.id && playerScreenY>wy && playerScreenY<wy+wall.height){ if(players.length<maxPlayers){ const left={...p,x:clamp(p.x-8, canvas.width/2-roadWidth/2+10, canvas.width/2+road
+  const now=Date.now();
+  if(now-lastWallSpawn>wallInterval){ lastWallSpawn=now; wall.y=horizon; wall.active=true; wall.id++; }
+  if(wall.active) wall.y+=roadScroll;
+  if(wall.active){ ctx.fillStyle='blue'; ctx.fillRect(centerXScreen-wall.width/2,wall.y,wall.width,wall.height); ctx.fillStyle='white'; ctx.font='28px sans-serif'; ctx.textAlign='center'; ctx.fillText('2X',centerXScreen,wall.y+wall.height/2+10); }
+  for(let i=players.length-1;i>=0;i--){
+    const p=players[i];
+    const playerY=canvas.height-120-p.z;
+    if(wall.active && p.lastWallId!==wall.id && playerY>wall.y && playerY<wall.y+wall.height){
+      if(players.length<maxPlayers){
+        players.push({...p, x:clamp(p.x+Math.random()*16-8, centerXScreen-roadWidth/2+10, centerXScreen+roadWidth/2-10), lastWallId:wall.id, bobPhase: Math.random()*Math.PI*2});
+        p.lastWallId=wall.id;
+      }
+    }
+  }
+}
+
+// --- Background ---
+function drawBackground(){
+  if(!running){ ctx.fillStyle='#3b7ddd'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='white'; ctx.font='40px sans-serif'; ctx.textAlign='center'; ctx.fillText('Last War — Runner',centerXScreen,canvas.height/2-24);
+    ctx.font='20px sans-serif'; ctx.fillText('Click to Start',centerXScreen,canvas.height/2+16); return; }
+  const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+  grad.addColorStop(0,'#3d3d3d'); grad.addColorStop(1,'#111'); ctx.fillStyle=grad; ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+// --- Game Loop ---
+function gameLoop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawBackground();
+  if(!running) return;
+  updateRoad(); drawRoad();
+  updatePlayers(); drawPlayers();
+  handleWall();
+  requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener('click',()=>{ running=true; initRoad(); gameLoop(); });
+window.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft') formationInput=-12; if(e.key==='ArrowRight') formationInput=12; });
+window.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft'||e.key==='ArrowRight') formationInput=0; });
+
+drawBackground();
+</script>
+</body>
+</html>
