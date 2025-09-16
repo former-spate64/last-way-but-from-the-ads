@@ -78,28 +78,36 @@ function createPlayer(x=centerXScreen,z=10){
 }
 players=[createPlayer()];
 
-function updatePlayers(){
-  for(let i=0;i<players.length;i++){
-    const p=players[i];
-    p.z=clamp(p.z+roadScroll,minZ,maxZ);
-    let sepX=0, sepZ=0;
-    for(let j=0;j<players.length;j++){ 
-      if(i===j) continue; 
-      const o=players[j]; 
-      const dx=o.x-p.x; 
-      const dz=o.z-p.z; 
-      const dist=Math.sqrt(dx*dx+dz*dz);
-      if(dist<32){
-        const push=0.02*(32-dist);
-        sepX -= dx/dist * push;
-        sepZ -= dz/dist * push;
-      }
+function updatePlayers() {
+  // --- leader-following formation ---
+  const leader = players[0]; // first player is the leader
+  leader.z = clamp(leader.z + 0.4, minZ, maxZ); // leader moves forward
+  leader.x = clamp(
+    leader.x + formationInput * 1.2, // faster side movement
+    canvas.width / 2 - roadWidth / 2 + 20,
+    canvas.width / 2 + roadWidth / 2 - 20
+  );
+
+  // make followers line up behind leader
+  for (let i = 1; i < players.length; i++) {
+    const p = players[i];
+    const ahead = players[i - 1];
+    // target position is just behind the player ahead
+    const targetX = ahead.x + (Math.random() * 2 - 1); // slight jiggle
+    const targetZ = ahead.z - 14; // spacing between players
+    p.x = lerp(p.x, targetX, 0.2);
+    p.z = lerp(p.z, targetZ, 0.2);
+  }
+
+  // --- despawn if off screen ---
+  for (let i = players.length - 1; i >= 0; i--) {
+    const p = players[i];
+    if (
+      p.x < 0 || p.x > canvas.width || // off left/right
+      p.z < minZ - 10 || p.z > maxZ + 20 // off depth
+    ) {
+      players.splice(i, 1);
     }
-    p.x += formationInput*0.05 + sepX;
-    p.z += sepZ;
-    const halfRoad=roadWidth/2-18;
-    p.x=clamp(p.x,centerXScreen-halfRoad,centerXScreen+halfRoad);
-    p.z=clamp(p.z,minZ,maxZ);
   }
 }
 
